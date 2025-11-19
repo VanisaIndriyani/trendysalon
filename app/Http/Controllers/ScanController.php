@@ -95,19 +95,19 @@ class ScanController extends Controller
         ->take(3)
         ->values();
 
-        // Persist recommendation (if user info provided)
+        // Persist recommendation with safe defaults
+        // Kolom 'name' dan 'phone' tidak nullable pada schema saat ini,
+        // jadi kita isi default agar data tetap tercatat di laporan meski user tidak mengisi form.
         try {
-            if ($userName && $userPhone) {
-                Recommendation::create([
-                    'name' => $userName,
-                    'phone' => $userPhone,
-                    'hair_length' => $pref['length'] ?? null,
-                    'hair_type' => $pref['type'] ?? null,
-                    'hair_condition' => $pref['condition'] ?? null,
-                    'face_shape' => $faceShape ?: 'oval',
-                    'recommended_models' => collect($items)->pluck('name')->filter()->implode(', '),
-                ]);
-            }
+            Recommendation::create([
+                'name' => $userName ?: 'Pengguna',
+                'phone' => $userPhone ?: '',
+                'hair_length' => $pref['length'] ?? null,
+                'hair_type' => $pref['type'] ?? null,
+                'hair_condition' => $pref['condition'] ?? null,
+                'face_shape' => $faceShape ?: 'oval',
+                'recommended_models' => collect($items)->pluck('name')->filter()->implode(', '),
+            ]);
         } catch (\Throwable $e) {
             // ignore persist errors for UX
         }
