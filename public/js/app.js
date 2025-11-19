@@ -312,9 +312,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // faceShape sudah dideklarasikan di atas, gunakan nilai default 'oval' jika null
     const loadRecs = async () => {
         try {
-            const apiUrl = (window.__SCAN_ROUTES__ && window.__SCAN_ROUTES__.apiModels) ? window.__SCAN_ROUTES__.apiModels : '../api/recommendations/hair-models';
-            const res = await fetch(`${apiUrl}?face_shape=${encodeURIComponent(apiFaceShape)}`);
-            const json = await res.json();
+            const injected = (window.__SCAN_ROUTES__ && window.__SCAN_ROUTES__.apiModels) ? window.__SCAN_ROUTES__.apiModels : null;
+            const relative = '../api/recommendations/hair-models';
+            const pickUrl = (u) => `${u}?face_shape=${encodeURIComponent(apiFaceShape)}`;
+
+            let res;
+            let json;
+            // Coba URL yang disuntik dari Blade terlebih dahulu jika tersedia
+            if (injected) {
+                try {
+                    res = await fetch(pickUrl(injected));
+                    if (!res.ok) throw new Error(`Bad status ${res.status}`);
+                    json = await res.json();
+                } catch (e) {
+                    // Jika gagal (misconfig APP_URL, karakter aneh, dll), fallback ke relatif
+                    res = await fetch(pickUrl(relative));
+                    json = await res.json();
+                }
+            } else {
+                // Tidak ada injeksi? langsung pakai relatif
+                res = await fetch(pickUrl(relative));
+                json = await res.json();
+            }
+
             const items = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
             loading?.classList.add('hidden');
             if (!items.length) {

@@ -413,12 +413,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fallback loader that hits rule-based recommendation API when analyze isn't used
     const loadRecs = async () => {
         try {
-            const apiUrl = (window.__SCAN_ROUTES__ && window.__SCAN_ROUTES__.apiModels) ? window.__SCAN_ROUTES__.apiModels : '../api/recommendations/hair-models';
-            const resp = await fetch(`${apiUrl}?face_shape=${encodeURIComponent(apiFaceShape)}`);
-            const json = await resp.json();
+            const injected = (window.__SCAN_ROUTES__ && window.__SCAN_ROUTES__.apiModels) ? window.__SCAN_ROUTES__.apiModels : null;
+            const relative = '../api/recommendations/hair-models';
+            const pickUrl = (u) => `${u}?face_shape=${encodeURIComponent(apiFaceShape)}`;
+
+            let resp;
+            let json;
+            if (injected) {
+                try {
+                    resp = await fetch(pickUrl(injected));
+                    if (!resp.ok) throw new Error(`Bad status ${resp.status}`);
+                    json = await resp.json();
+                } catch (e) {
+                    resp = await fetch(pickUrl(relative));
+                    json = await resp.json();
+                }
+            } else {
+                resp = await fetch(pickUrl(relative));
+                json = await resp.json();
+            }
+
             const items = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
             if (items.length) {
-                // Map data to expected render format
                 render(items.map(m => ({ name: m.name, image_url: resolveAsset(m.image || m.illustration_url) })));
             }
         } catch (e) {
