@@ -202,6 +202,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const list = document.getElementById('recommendations');
     if (!list) return;
 
+    // Helper untuk membentuk URL gambar absolut
+    const assetBase = (window.__ASSET_BASE__ || window.location.origin).replace(/\/$/, '');
+    const resolveAsset = (u) => {
+        if (!u) return '';
+        if (u.startsWith('http') || u.startsWith('data:')) return u;
+        if (u.startsWith('/')) return u;
+        return `${assetBase}/${u.replace(/^\//,'')}`;
+    };
+
     // Try-on elements
     const tryOn = document.getElementById('tryOnControls');
     const tryOnBase = document.getElementById('tryOnBase');
@@ -410,7 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const items = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
             if (items.length) {
                 // Map data to expected render format
-                render(items.map(m => ({ name: m.name, image_url: m.image || m.illustration_url })));
+                render(items.map(m => ({ name: m.name, image_url: resolveAsset(m.image || m.illustration_url) })));
             }
         } catch (e) {
             // Silent fallback

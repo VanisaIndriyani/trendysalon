@@ -204,6 +204,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const list = document.getElementById('recommendations');
     if (!list) return;
 
+    // Helper untuk membuat URL gambar absolut dari path relatif
+    const assetBase = (window.__ASSET_BASE__ || window.location.origin).replace(/\/$/, '');
+    const resolveAsset = (u) => {
+        if (!u) return '';
+        if (u.startsWith('http') || u.startsWith('data:')) return u;
+        if (u.startsWith('/')) return u; // already absolute from site root
+        return `${assetBase}/${u.replace(/^\//,'')}`;
+    };
+
     // Try-on elements
     const tryOn = document.getElementById('tryOnControls');
     const tryOnBase = document.getElementById('tryOnBase');
@@ -314,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             list.innerHTML = items.map((m) => {
-                const imgUrl = m.image || m.illustration_url || '';
+                const imgUrl = resolveAsset(m.image || m.illustration_url || '');
                 return `
                 <button class="group rounded-xl border border-stone-200 bg-white p-3 text-left shadow hover:shadow-md" data-overlay="${imgUrl}">
                     <div class="flex items-center gap-3">

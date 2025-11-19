@@ -24,6 +24,7 @@
                 apiModels: "{{ url('/api/recommendations/hair-models') }}",
                 analyze: "{{ url('/scan/analyze') }}"
             };
+            window.__ASSET_BASE__ = "{{ url('/') }}";
         </script>
         <script src="{{ asset('js/app.js') }}" defer></script>
         <!-- MediaPipe FaceMesh (CDN) for automatic landmark detection -->
