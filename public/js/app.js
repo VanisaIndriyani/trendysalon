@@ -172,6 +172,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const dataUrl = sessionStorage.getItem('scanImage');
     let faceShape = sessionStorage.getItem('faceShape') || 'oval';
+    // Normalize to API expected enum: Oval, Round, Square, Heart, Oblong
+    const normalizeFaceShapeForApi = (s) => {
+        const v = (s || '').toLowerCase();
+        if (v === 'oval') return 'Oval';
+        if (v === 'bulat' || v === 'round') return 'Round';
+        if (v === 'lonjong' || v === 'oblong') return 'Oblong';
+        if (v === 'square' || v === 'kotak') return 'Square';
+        if (v === 'heart' || v === 'hati') return 'Heart';
+        return 'Oval';
+    };
+    const apiFaceShape = normalizeFaceShapeForApi(faceShape);
     const userName = sessionStorage.getItem('userName');
     const userPhone = sessionStorage.getItem('userPhone');
     const prefLength = sessionStorage.getItem('prefLength');
@@ -293,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadRecs = async () => {
         try {
             const apiUrl = (window.__SCAN_ROUTES__ && window.__SCAN_ROUTES__.apiModels) ? window.__SCAN_ROUTES__.apiModels : '../api/recommendations/hair-models';
-            const res = await fetch(`${apiUrl}?face_shape=${encodeURIComponent(faceShape)}`);
+            const res = await fetch(`${apiUrl}?face_shape=${encodeURIComponent(apiFaceShape)}`);
             const data = await res.json();
             loading?.classList.add('hidden');
             if (!Array.isArray(data) || data.length === 0) {
