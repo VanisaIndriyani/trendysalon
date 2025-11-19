@@ -98,8 +98,10 @@ class ScanController extends Controller
         // Persist recommendation with safe defaults
         // Kolom 'name' dan 'phone' tidak nullable pada schema saat ini,
         // jadi kita isi default agar data tetap tercatat di laporan meski user tidak mengisi form.
+        $saved = false;
+        $savedId = null;
         try {
-            Recommendation::create([
+            $rec = Recommendation::create([
                 'name' => $userName ?: 'Pengguna',
                 'phone' => $userPhone ?: '',
                 'hair_length' => $pref['length'] ?? null,
@@ -108,7 +110,11 @@ class ScanController extends Controller
                 'face_shape' => $faceShape ?: 'oval',
                 'recommended_models' => collect($items)->pluck('name')->filter()->implode(', '),
             ]);
+            $saved = true;
+            $savedId = $rec->id ?? null;
+            \Log::info('Recommendation saved', ['id' => $savedId, 'name' => $rec->name, 'models' => $rec->recommended_models]);
         } catch (\Throwable $e) {
+            \Log::warning('Recommendation save failed', ['error' => $e->getMessage()]);
             // ignore persist errors for UX
         }
 
@@ -118,6 +124,8 @@ class ScanController extends Controller
             'face_shape' => $faceShape ?: 'oval',
             'preferences' => $pref,
             'recommendations' => $items,
+            'saved' => $saved,
+            'saved_id' => $savedId,
         ]);
     }
 }
