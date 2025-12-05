@@ -4,38 +4,38 @@
     <div class="space-y-6">
         <!-- Stats cards -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="relative rounded-2xl bg-white ring-1 ring-stone-200 p-5 shadow-sm min-h-[120px] flex flex-col justify-between">
+            <div class="relative rounded-2xl bg-white ring-1 ring-stone-200 p-5 shadow-sm hover:shadow-lg min-h-[120px] flex flex-col justify-between transition-all duration-300 group animate-fade-in-up hover:scale-105 hover:ring-pink-200">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-sm font-semibold text-stone-700 tracking-wide">Vitamin Terlaris</p>
-                        <h3 class="mt-2 text-xl font-extrabold">{{ $topVitamin ? $topVitamin->name : 'Tidak ada data' }}</h3>
+                        <h3 class="mt-2 text-xl font-extrabold bg-gradient-to-r from-pink-600 to-amber-600 bg-clip-text text-transparent">{{ $topVitamin ? $topVitamin->name : 'Tidak ada data' }}</h3>
                         <p class="mt-1 text-xs text-stone-600">{{ $topVitamin ? ('Tipe: ' . $topVitamin->hair_type) : 'Tambah data vitamin terlebih dahulu' }}</p>
                     </div>
-                    <div class="h-8 w-8 rounded-full grid place-items-center bg-pink-50 ring-1 ring-pink-200 text-pink-600">
+                    <div class="h-8 w-8 rounded-full grid place-items-center bg-gradient-to-br from-pink-50 to-pink-100 ring-1 ring-pink-200 text-pink-600 transition-all duration-300 group-hover:scale-110 group-hover:ring-pink-300">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="h-4 w-4"><circle cx="12" cy="12" r="9" stroke-width="1.5"/><path d="M12 7v6l4 2" stroke-width="1.5"/></svg>
                     </div>
                 </div>
             </div>
-            <div class="relative rounded-2xl bg-white ring-1 ring-stone-200 p-5 shadow-sm min-h-[120px] flex flex-col justify-between">
+            <div class="relative rounded-2xl bg-white ring-1 ring-stone-200 p-5 shadow-sm hover:shadow-lg min-h-[120px] flex flex-col justify-between transition-all duration-300 group animate-fade-in-up hover:scale-105 hover:ring-pink-200">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-sm font-semibold text-stone-700 tracking-wide">Total Model Rambut</p>
-                        <h3 class="mt-2 text-xl font-extrabold">{{ $totalModels }}</h3>
+                        <h3 class="mt-2 text-xl font-extrabold bg-gradient-to-r from-pink-600 to-amber-600 bg-clip-text text-transparent">{{ $totalModels }}</h3>
                         <p class="mt-1 text-xs text-stone-600">Model Tersedia</p>
                     </div>
-                    <div class="h-8 w-8 rounded-full grid place-items-center bg-pink-50 ring-1 ring-pink-200 text-pink-600">
+                    <div class="h-8 w-8 rounded-full grid place-items-center bg-gradient-to-br from-pink-50 to-pink-100 ring-1 ring-pink-200 text-pink-600 transition-all duration-300 group-hover:scale-110 group-hover:ring-pink-300">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="h-4 w-4"><path d="M8 11h8M8 15h8M7 7h10" stroke-width="1.5"/></svg>
                     </div>
                 </div>
             </div>
-            <div class="relative rounded-2xl bg-white ring-1 ring-stone-200 p-5 shadow-sm min-h-[120px] flex flex-col justify-between">
+            <div class="relative rounded-2xl bg-white ring-1 ring-stone-200 p-5 shadow-sm hover:shadow-lg min-h-[120px] flex flex-col justify-between transition-all duration-300 group animate-fade-in-up hover:scale-105 hover:ring-pink-200">
                 <div class="flex items-start justify-between">
                     <div>
                         <p class="text-sm font-semibold text-stone-700 tracking-wide">Total Vitamin Rambut</p>
-                        <h3 class="mt-2 text-xl font-extrabold">{{ $totalVitamins }}</h3>
+                        <h3 class="mt-2 text-xl font-extrabold bg-gradient-to-r from-pink-600 to-amber-600 bg-clip-text text-transparent">{{ $totalVitamins }}</h3>
                         <p class="mt-1 text-xs text-stone-600">Vitamin Tersedia</p>
                     </div>
-                    <div class="h-8 w-8 rounded-full grid place-items-center bg-pink-50 ring-1 ring-pink-200 text-pink-600">
+                    <div class="h-8 w-8 rounded-full grid place-items-center bg-gradient-to-br from-pink-50 to-pink-100 ring-1 ring-pink-200 text-pink-600 transition-all duration-300 group-hover:scale-110 group-hover:ring-pink-300">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="h-4 w-4"><path d="M12 5v14M5 12h14" stroke-width="1.5"/></svg>
                     </div>
                 </div>

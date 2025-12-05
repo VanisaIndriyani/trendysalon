@@ -2,46 +2,311 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\HairOption;
 use App\Models\HairModel;
 use App\Models\Recommendation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class ScanController extends Controller
 {
     public function analyze(Request $request)
     {
-        $dataUrl = $request->input('image');
-        $faceShape = $request->input('face_shape');
-        $pref = $request->input('pref', []);
-        $userName = $request->input('user_name');
-        $userPhone = $request->input('user_phone');
-        $hasValidImage = $dataUrl && Str::startsWith($dataUrl, 'data:image');
+        // Simple request trace to a dedicated debug log file
+        $debugPath = storage_path('logs/scan_debug.log');
+        $trace = "[" . now()->toDateTimeString() . "] analyze() called - IP: {$request->ip()} - Method: {$request->method()} - URL: {$request->fullUrl()}\n";
+        file_put_contents($debugPath, $trace, FILE_APPEND);
 
-        // Persist capture (optional for auditing) hanya jika gambar valid
+        Log::info('🔵 SCAN CONTROLLER ANALYZE METHOD CALLED', [
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'ip' => $request->ip(),
+            'timestamp' => now()->toDateTimeString(),
+        ]);
+
+        // --- Detect request type and normalize input ---
+        $isFormData = $request->hasFile('image');
+        $contentType = $request->header('Content-Type', '');
+        $isJson = $request->isJson() || str_contains($contentType, 'application/json');
+        
+        // Log ALL request data for debugging
+        Log::info('🔍 Request type detection', [
+            'has_file' => $isFormData,
+            'is_json' => $isJson,
+            'content_type' => $contentType,
+            'method' => $request->method(),
+            'all_input_keys' => array_keys($request->all()),
+            'has_user_name' => $request->has('user_name'),
+            'has_user_phone' => $request->has('user_phone'),
+            'user_name_value' => $request->input('user_name', 'NOT_SET'),
+            'user_phone_value' => $request->input('user_phone', 'NOT_SET'),
+        ]);
+
+        // Initialize variables
+        $dataUrl = null;
+        $faceShape = 'Oval';
+        $pref = [];
+        $userName = '';
+        $userPhone = '';
         $storedUrl = null;
-        if ($hasValidImage) {
+
+        // Handle JSON request (dataURL format)
+        if ($isJson) {
             try {
-                [$meta, $content] = explode(',', $dataUrl, 2);
-                $binary = base64_decode($content);
-                $filename = 'scans/'.date('Ymd_His').'_'.Str::random(6).'.jpg';
-                Storage::disk('public')->put($filename, $binary);
-                $storedUrl = asset('storage/'.$filename);
+                $json = $request->json()->all();
+            } catch (\Exception $e) {
+                // Fallback: try to get JSON from request body
+                $body = $request->getContent();
+                $json = json_decode($body, true) ?? [];
+                Log::warning('JSON parse from json() failed, using getContent()', ['error' => $e->getMessage()]);
+            }
+            
+            $dataUrl = $json['image'] ?? null;
+            $faceShape = $json['face_shape'] ?? $request->input('face_shape', 'Oval');
+            $pref = $json['pref'] ?? [];
+            $userName = trim((string)($json['user_name'] ?? $request->input('user_name', '')));
+            $userPhone = trim((string)($json['user_phone'] ?? $request->input('user_phone', '')));
+            
+            Log::info('✅ Processing JSON request', [
+                'has_image' => !empty($dataUrl),
+                'face_shape' => $faceShape,
+                'user_name' => $userName ?: 'EMPTY',
+                'user_phone' => $userPhone ?: 'EMPTY',
+                'pref' => $pref,
+                'json_keys' => array_keys($json ?? []),
+                'user_name_length' => strlen($userName),
+                'user_phone_length' => strlen($userPhone),
+            ]);
+        } 
+        // Handle FormData request (file upload) OR mixed request
+        else {
+            // Get form fields from FormData - try multiple ways
+            $faceShape = $request->input('face_shape', 'Oval');
+            
+            // Try to get user_name from multiple sources
+            $userName = trim((string)$request->input('user_name', ''));
+            if (empty($userName)) {
+                $userName = trim((string)$request->input('name', ''));
+            }
+            
+            // Try to get user_phone from multiple sources
+            $userPhone = trim((string)$request->input('user_phone', ''));
+            if (empty($userPhone)) {
+                $userPhone = trim((string)$request->input('phone', ''));
+            }
+            
+            Log::info('📝 FormData - Extracted user data', [
+                'user_name' => $userName ?: 'EMPTY',
+                'user_phone' => $userPhone ?: 'EMPTY',
+                'user_name_length' => strlen($userName),
+                'user_phone_length' => strlen($userPhone),
+            ]);
+            
+            // Handle nested preferences from FormData
+            // Laravel automatically converts pref[length] to pref.length in array
+            $prefInput = $request->input('pref', []);
+            
+            // Log all inputs for debugging
+            $allInputs = $request->all();
+            Log::info('📋 FormData - All inputs received', [
+                'all_inputs' => $allInputs,
+                'all_input_keys' => array_keys($allInputs),
+                'pref_input_raw' => $prefInput,
+                'pref_input_type' => gettype($prefInput),
+            ]);
+            
+            // If pref is already an array (Laravel auto-conversion), use it
+            if (is_array($prefInput) && !empty($prefInput)) {
+                $pref = $prefInput;
+                Log::info('✅ Using pref as array from Laravel auto-conversion', ['pref' => $pref]);
+            } else {
+                // Fallback: manually extract from different possible formats
+                // Try multiple formats: pref[length], pref.length, pref_length
+                $pref = [];
+                
+                // Try pref[length] format (most common in FormData)
+                $length = $request->input('pref[length]', '');
+                if (empty($length)) {
+                    $length = $request->input('pref.length', '');
+                }
+                if (empty($length) && is_array($prefInput)) {
+                    $length = $prefInput['length'] ?? '';
+                }
+                
+                $type = $request->input('pref[type]', '');
+                if (empty($type)) {
+                    $type = $request->input('pref.type', '');
+                }
+                if (empty($type) && is_array($prefInput)) {
+                    $type = $prefInput['type'] ?? '';
+                }
+                
+                $condition = $request->input('pref[condition]', '');
+                if (empty($condition)) {
+                    $condition = $request->input('pref.condition', '');
+                }
+                if (empty($condition) && is_array($prefInput)) {
+                    $condition = $prefInput['condition'] ?? '';
+                }
+                
+                $pref = [
+                    'length' => trim((string)$length),
+                    'type' => trim((string)$type),
+                    'condition' => trim((string)$condition),
+                ];
+                
+                Log::info('🔧 Manually extracted pref from FormData', [
+                    'pref_extracted' => $pref,
+                    'length_source' => $request->input('pref[length]') ? 'pref[length]' : ($request->input('pref.length') ? 'pref.length' : 'none'),
+                ]);
+            }
+            
+            // Filter out empty values and ensure all values are strings
+            $pref = array_filter($pref, function($value) {
+                return !empty(trim((string)$value));
+            });
+            
+            Log::info('✅ Processing FormData request completed', [
+                'has_file' => $request->hasFile('image'),
+                'face_shape' => $faceShape,
+                'user_name' => $userName ?: 'EMPTY',
+                'user_phone' => $userPhone ?: 'EMPTY',
+                'pref_final' => $pref,
+                'user_name_empty' => empty($userName),
+                'user_phone_empty' => empty($userPhone),
+            ]);
+        }
+        
+        // Final validation - ensure we have user data
+        if (empty($userName)) {
+            Log::warning('⚠️ WARNING: user_name is empty after parsing!', [
+                'request_all' => $request->all(),
+                'is_json' => $isJson,
+                'is_form_data' => $isFormData,
+            ]);
+        }
+        if (empty($userPhone)) {
+            Log::warning('⚠️ WARNING: user_phone is empty after parsing!', [
+                'request_all' => $request->all(),
+                'is_json' => $isJson,
+                'is_form_data' => $isFormData,
+            ]);
+        }
+
+        // Handle file upload (FormData)
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            try {
+                $file = $request->file('image');
+                
+                // Validate file type
+                $allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+                $mimeType = $file->getMimeType();
+                
+                if (!in_array($mimeType, $allowedMimes)) {
+                    Log::warning('Invalid file type uploaded', ['mime' => $mimeType]);
+                    throw new \Exception('Invalid file type. Only images are allowed.');
+                }
+                
+                // Get file extension
+                $ext = $file->getClientOriginalExtension() ?: 'jpg';
+                if (empty($ext)) {
+                    // Try to determine extension from mime type
+                    $extMap = [
+                        'image/jpeg' => 'jpg',
+                        'image/png' => 'png',
+                        'image/gif' => 'gif',
+                        'image/webp' => 'webp',
+                    ];
+                    $ext = $extMap[$mimeType] ?? 'jpg';
+                }
+                
+                $filename = date('Ymd_His') . '_' . Str::random(6) . '.' . $ext;
+                
+                // Store file using storeAs for better control
+                $path = $file->storeAs('scans', $filename, 'public');
+                $storedUrl = asset('storage/' . $path);
+                
+                Log::info('✅ Image uploaded via FormData', [
+                    'file' => $filename,
+                    'path' => $path,
+                    'url' => $storedUrl,
+                    'size' => $file->getSize(),
+                    'mime' => $mimeType,
+                ]);
             } catch (\Throwable $e) {
-                $storedUrl = null;
+                Log::error('❌ Failed to store uploaded image', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
             }
         }
 
-        // Content-Based Filtering: skor model rambut berdasarkan face_shape + preferensi
+        // Handle dataURL (JSON format) - only if no file was uploaded
+        if (!$storedUrl && $dataUrl) {
+            $hasValidDataUrl = is_string($dataUrl) && Str::startsWith($dataUrl, 'data:image');
+            
+            if ($hasValidDataUrl) {
+                try {
+                    [$meta, $content] = explode(',', $dataUrl, 2);
+                    $binary = base64_decode($content, true); // strict mode
+                    
+                    if ($binary !== false && strlen($binary) > 0) {
+                        // Validate it's actually an image by checking magic bytes
+                        $isValidImage = false;
+                        if (strpos($binary, "\xFF\xD8\xFF") === 0) { // JPEG
+                            $isValidImage = true;
+                            $ext = 'jpg';
+                        } elseif (strpos($binary, "\x89PNG") === 0) { // PNG
+                            $isValidImage = true;
+                            $ext = 'png';
+                        } elseif (strpos($binary, "GIF8") === 0) { // GIF
+                            $isValidImage = true;
+                            $ext = 'gif';
+                        } elseif (strpos($binary, "RIFF") === 0 && strpos($binary, "WEBP", 8) !== false) { // WEBP
+                            $isValidImage = true;
+                            $ext = 'webp';
+                        }
+                        
+                        if ($isValidImage) {
+                            $filename = 'scans/' . date('Ymd_His') . '_' . Str::random(6) . '.' . $ext;
+                            Storage::disk('public')->put($filename, $binary);
+                            $storedUrl = asset('storage/' . $filename);
+                            
+                            Log::info('✅ Image saved from dataURL', [
+                                'file' => $filename,
+                                'url' => $storedUrl,
+                                'size' => strlen($binary),
+                                'format' => $ext,
+                            ]);
+                        } else {
+                            Log::warning('Invalid image data in dataURL - magic bytes check failed');
+                        }
+                    } else {
+                        Log::warning('base64_decode failed or returned empty data');
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('❌ Failed to save image from dataUrl', [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                }
+            } else {
+                Log::warning('Invalid dataURL format', [
+                    'dataUrl_length' => strlen($dataUrl ?? ''),
+                    'starts_with_data_image' => is_string($dataUrl) && Str::startsWith($dataUrl, 'data:image'),
+                ]);
+            }
+        }
+
+        // --- Recommendation logic (content-based fallback) ---
         $face = strtolower((string)($faceShape ?: 'oval'));
         $prefLength = strtolower((string)($pref['length'] ?? ''));
         $prefType = strtolower((string)($pref['type'] ?? ''));
 
         $models = HairModel::all();
         if ($models->isEmpty()) {
-            // fallback jika tidak ada data di DB
+            // fallback static models if DB has none
             $fallback = collect([
                 ['name' => 'Oval Layer with Curtain Bangs', 'image' => 'img/model1.png', 'types' => 'Lurus, Ikal, Bergelombang', 'length' => 'Panjang'],
                 ['name' => 'Butterfly Hair Cut', 'image' => 'img/model2.png', 'types' => 'Lurus, Ikal, Bergelombang', 'length' => 'Panjang'],
@@ -54,7 +319,6 @@ class ScanController extends Controller
             $models = $fallback->map(function ($r) { return (object) $r; });
         }
 
-        // Kata kunci yang cocok per bentuk wajah
         $shapeKeywords = [
             'oval' => ['layer', 'curtain', 'butterfly', 'wolf', 'face framing', 'wavy', 'bob'],
             'bulat' => ['layer', 'curtain', 'butterfly', 'wavy', 'long'],
@@ -65,22 +329,16 @@ class ScanController extends Controller
         $items = $models->map(function ($m) use ($face, $shapeKeywords, $prefLength, $prefType) {
             $score = 0;
             $nameLower = strtolower($m->name ?? '');
-            $lengthLower = strtolower($m->length ?? '');
+            $lengthLower = strtolower((string)($m->length ?? ''));
             $typesLower = strtolower((string)($m->types ?? ''));
 
-            // Bentuk wajah: tambahkan skor jika nama mengandung keyword yang direkomendasikan
             $keywords = $shapeKeywords[$face] ?? $shapeKeywords['oval'];
             foreach ($keywords as $kw) {
                 if (strpos($nameLower, $kw) !== false) { $score += 2; break; }
             }
 
-            // Preferensi panjang rambut
             if ($prefLength && $lengthLower === strtolower($prefLength)) { $score += 2; }
-
-            // Preferensi jenis rambut
             if ($prefType && strpos($typesLower, strtolower($prefType)) !== false) { $score += 1; }
-
-            // Bentuk wajah "oval" dianggap cocok ke banyak model: bonus kecil
             if ($face === 'oval') { $score += 1; }
 
             return [
@@ -91,39 +349,164 @@ class ScanController extends Controller
         })
         ->sortByDesc('score')
         ->take(3)
-        ->values();
+        ->values()
+        ->toArray();
 
-        // Persist recommendation with safe defaults
-        // Kolom 'name' dan 'phone' tidak nullable pada schema saat ini,
-        // jadi kita isi default agar data tetap tercatat di laporan meski user tidak mengisi form.
+        // --- Persist recommendation safely ---
         $saved = false;
         $savedId = null;
-        try {
-            $rec = Recommendation::create([
-                'name' => $userName ?: 'Pengguna',
-                'phone' => $userPhone ?: '',
-                'hair_length' => $pref['length'] ?? null,
-                'hair_type' => $pref['type'] ?? null,
-                'hair_condition' => $pref['condition'] ?? null,
-                'face_shape' => $faceShape ?: 'oval',
-                'recommended_models' => collect($items)->pluck('name')->filter()->implode(', '),
-            ]);
-            $saved = true;
-            $savedId = $rec->id ?? null;
-            \Log::info('Recommendation saved', ['id' => $savedId, 'name' => $rec->name, 'models' => $rec->recommended_models]);
-        } catch (\Throwable $e) {
-            \Log::warning('Recommendation save failed', ['error' => $e->getMessage()]);
-            // ignore persist errors for UX
+        $saveError = null;
+
+        // Prepare data for saving
+        $nameToSave = trim($userName) ?: 'Pengguna';
+        $phoneToSave = trim($userPhone) ?: '-';
+        $recommendedModels = collect($items)->pluck('name')->filter()->implode(', ');
+        if (empty($recommendedModels)) {
+            $recommendedModels = 'Tidak ada rekomendasi';
         }
 
-        return response()->json([
+        // Prepare data array
+        $dataToSave = [
+            'name' => $nameToSave,
+            'phone' => $phoneToSave,
+            'hair_length' => !empty($pref['length']) ? (string)$pref['length'] : null,
+            'hair_type' => !empty($pref['type']) ? (string)$pref['type'] : null,
+            'hair_condition' => !empty($pref['condition']) ? (string)$pref['condition'] : null,
+            'face_shape' => $faceShape ?: 'Oval',
+            'recommended_models' => $recommendedModels,
+        ];
+
+        // Log data before saving
+        Log::info('📝 Attempting to save recommendation', [
+            'data_to_save' => $dataToSave,
+            'pref_original' => $pref,
+            'items_count' => count($items),
+        ]);
+
+        try {
+            // Validate required fields - but use defaults if empty
+            if (empty($nameToSave) || $nameToSave === 'Pengguna') {
+                // If name is still empty or default, try to get from request again
+                $nameToSave = trim($userName) ?: 'Pengguna';
+                Log::warning('⚠️ Name was empty, using default or retry', ['name' => $nameToSave]);
+            }
+            
+            if (empty($phoneToSave) || $phoneToSave === '-') {
+                // If phone is still empty or default, try to get from request again
+                $phoneToSave = trim($userPhone) ?: '-';
+                Log::warning('⚠️ Phone was empty, using default or retry', ['phone' => $phoneToSave]);
+            }
+            
+            // Final check - ensure we have at least default values
+            if (empty($nameToSave)) {
+                $nameToSave = 'Pengguna';
+            }
+            if (empty($phoneToSave)) {
+                $phoneToSave = '-';
+            }
+            
+            // Update dataToSave with validated values
+            $dataToSave['name'] = $nameToSave;
+            $dataToSave['phone'] = $phoneToSave;
+            
+            Log::info('💾 Final data to save', [
+                'data_to_save' => $dataToSave,
+                'name' => $nameToSave,
+                'phone' => $phoneToSave,
+            ]);
+
+            // Use a DB transaction to be safe
+            $rec = Recommendation::create($dataToSave);
+
+            $saved = true;
+            $savedId = $rec->id ?? null;
+
+            Log::info('✅ Recommendation saved successfully', [
+                'id' => $savedId,
+                'name' => $rec->name,
+                'phone' => $rec->phone,
+                'face_shape' => $rec->face_shape,
+                'recommended_models' => $rec->recommended_models,
+                'created_at' => $rec->created_at,
+            ]);
+        } catch (\Throwable $e) {
+            $saveError = $e->getMessage();
+            Log::error('❌ Failed to save recommendation', [
+                'error' => $saveError,
+                'error_class' => get_class($e),
+                'trace' => $e->getTraceAsString(),
+                'data_attempted' => $dataToSave,
+                'pref' => $pref,
+                'user_name' => $userName,
+                'user_phone' => $userPhone,
+            ]);
+
+            // Try minimal second attempt to ensure we capture the event row if possible
+            try {
+                $minimalData = [
+                    'name' => $nameToSave,
+                    'phone' => $phoneToSave,
+                    'hair_length' => null,
+                    'hair_type' => null,
+                    'hair_condition' => null,
+                    'face_shape' => $faceShape ?: 'Oval',
+                    'recommended_models' => 'Error: ' . substr($saveError, 0, 120),
+                ];
+                
+                Log::info('🔄 Attempting fallback save with minimal data', ['data' => $minimalData]);
+                
+                $rec = Recommendation::create($minimalData);
+                $saved = true;
+                $savedId = $rec->id ?? null;
+                
+                Log::info('✅ Recommendation saved on fallback attempt', [
+                    'id' => $savedId,
+                    'name' => $rec->name,
+                    'phone' => $rec->phone,
+                ]);
+            } catch (\Throwable $e2) {
+                Log::error('❌ Fallback save also failed', [
+                    'error' => $e2->getMessage(),
+                    'error_class' => get_class($e2),
+                    'trace' => $e2->getTraceAsString(),
+                ]);
+            }
+        }
+
+        // Final response
+        $response = [
             'ok' => true,
             'stored_url' => $storedUrl,
-            'face_shape' => $faceShape ?: 'oval',
+            'face_shape' => $faceShape ?: 'Oval',
             'preferences' => $pref,
             'recommendations' => $items,
             'saved' => $saved,
             'saved_id' => $savedId,
+            'save_error' => $saveError,
+            'debug' => [
+                'user_name_received' => $userName ?: 'empty',
+                'user_phone_received' => $userPhone ?: 'empty',
+                'user_name_saved' => $saved ? ($nameToSave ?? 'N/A') : 'N/A',
+                'user_phone_saved' => $saved ? ($phoneToSave ?? 'N/A') : 'N/A',
+                'request_type' => $isFormData ? 'FormData' : ($isJson ? 'JSON' : 'Unknown'),
+                'data_prepared' => [
+                    'name' => $nameToSave,
+                    'phone' => $phoneToSave,
+                    'face_shape' => $faceShape,
+                ],
+            ],
+        ];
+
+        Log::info('✅ Analyze finished', [
+            'request_type' => $isFormData ? 'FormData' : ($isJson ? 'JSON' : 'Unknown'),
+            'image_stored' => !empty($storedUrl),
+            'stored_url' => $storedUrl,
+            'saved' => $saved,
+            'saved_id' => $savedId,
+            'recommendations_count' => count($items),
+            'save_error' => $saveError,
         ]);
+
+        return response()->json($response);
     }
 }
