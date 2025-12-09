@@ -203,128 +203,172 @@
         </div>
 
         <!-- Script -->
-        <script>
-            // Open Add Modal
-            document.addEventListener('DOMContentLoaded', function () {
-                const btnAdd = document.querySelector('button.inline-flex.items-center');
-                const modalAdd = document.getElementById('modal-add');
-                const modalEdit = document.getElementById('modal-edit');
-                const modalDelete = document.getElementById('modal-delete');
+       <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const btnAdd = document.querySelector('button.inline-flex.items-center');
+    const modalAdd = document.getElementById('modal-add');
+    const modalEdit = document.getElementById('modal-edit');
+    const modalDelete = document.getElementById('modal-delete');
 
-                function openModal(el) { el.classList.remove('hidden'); }
-                function closeModal(el) { el.classList.add('hidden'); }
+    function openModal(el) { el.classList.remove('hidden'); }
+    function closeModal(el) { el.classList.add('hidden'); }
 
-                if (btnAdd) btnAdd.addEventListener('click', () => openModal(modalAdd));
+    /* ============================
+       OPEN ADD MODAL (BUTTON)
+    ============================= */
+    if (btnAdd) btnAdd.addEventListener('click', () => openModal(modalAdd));
 
-                document.querySelectorAll('[data-close]')?.forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const target = document.querySelector(btn.getAttribute('data-close'));
-                        if (target) closeModal(target);
-                    });
+    /* ============================
+       CLOSE MODAL BUTTONS
+    ============================= */
+    document.querySelectorAll('[data-close]')?.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = document.querySelector(btn.getAttribute('data-close'));
+            if (target) closeModal(target);
+        });
+    });
+
+    /* ============================
+       EDIT MODAL (FILL DATA)
+    ============================= */
+    document.querySelectorAll('.btn-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+
+            document.getElementById('edit-name').value = btn.getAttribute('data-name') || '';
+            document.getElementById('edit-types').value = btn.getAttribute('data-types') || '';
+            document.getElementById('edit-length').value = btn.getAttribute('data-length') || 'Panjang';
+
+            document.getElementById('form-edit')
+                .setAttribute('action', `{{ url('/super/models') }}/${id}`);
+
+            const hiddenId = document.getElementById('edit-id');
+            if (hiddenId) hiddenId.value = id;
+
+            // Face shape preselect
+            const fsSel = document.getElementById('edit-face_shapes');
+            if (fsSel) {
+                const fsStr = btn.getAttribute('data-faceshapes') || '';
+                const vals = fsStr ? fsStr.split(',').map(s => s.trim()) : [];
+                Array.from(fsSel.options).forEach(opt => {
+                    opt.selected = vals.includes(opt.value);
                 });
+            }
 
-                // Edit buttons
-                document.querySelectorAll('.btn-edit').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const id = btn.getAttribute('data-id');
-                        document.getElementById('edit-name').value = btn.getAttribute('data-name') || '';
-                        document.getElementById('edit-types').value = btn.getAttribute('data-types') || '';
-                        document.getElementById('edit-length').value = btn.getAttribute('data-length') || 'Panjang';
-                        document.getElementById('form-edit').setAttribute('action', `{{ url('/super/models') }}/${id}`);
-                        const hiddenId = document.getElementById('edit-id');
-                        if (hiddenId) hiddenId.value = id;
-                        // Preselect face shapes
-                        const fsSel = document.getElementById('edit-face_shapes');
-                        if (fsSel) {
-                            const fsStr = btn.getAttribute('data-faceshapes') || '';
-                            const vals = fsStr ? fsStr.split(',').map(s => s.trim()) : [];
-                            Array.from(fsSel.options).forEach(opt => { opt.selected = vals.includes(opt.value); });
-                        }
-                        // Set current image preview
-                        const imgRel = btn.getAttribute('data-image') || '';
-                        const prevEl = document.getElementById('edit-preview');
-                        if (prevEl) {
-                            const base = window.location.origin.replace(/\/$/, '');
-                            const src = imgRel ? (imgRel.startsWith('http') ? imgRel : `${base}/${imgRel}`) : '';
-                            prevEl.src = src;
-                        }
-                        // Clear file input on open
-                        const fileInput = document.getElementById('edit-image_file');
-                        if (fileInput) fileInput.value = '';
-                        openModal(modalEdit);
-                    });
-                });
+            // Image preview
+            const imgRel = btn.getAttribute('data-image') || '';
+            const prevEl = document.getElementById('edit-preview');
+            if (prevEl) {
+                const base = window.location.origin.replace(/\/$/, '');
+                const src = imgRel ? (imgRel.startsWith('http') ? imgRel : `${base}/${imgRel}`) : '';
+                prevEl.src = src;
+            }
 
-                // Live preview on file selection in edit modal
-                const fileInputEdit = document.getElementById('edit-image_file');
-                if (fileInputEdit) {
-                    fileInputEdit.addEventListener('change', () => {
-                        const f = fileInputEdit.files?.[0];
-                        if (!f) return;
-                        const url = URL.createObjectURL(f);
-                        const prevEl = document.getElementById('edit-preview');
-                        if (prevEl) prevEl.src = url;
-                    });
+            // Clear file input
+            const fileInput = document.getElementById('edit-image_file');
+            if (fileInput) fileInput.value = '';
+
+            openModal(modalEdit);
+        });
+    });
+
+    /* ============================
+       LIVE PREVIEW NEW IMAGE
+    ============================= */
+    const fileInputEdit = document.getElementById('edit-image_file');
+    if (fileInputEdit) {
+        fileInputEdit.addEventListener('change', () => {
+            const f = fileInputEdit.files?.[0];
+            if (!f) return;
+            const url = URL.createObjectURL(f);
+            document.getElementById('edit-preview').src = url;
+        });
+    }
+
+    /* ============================
+       DELETE MODAL
+    ============================= */
+    document.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            const name = btn.getAttribute('data-name');
+
+            document.getElementById('delete-name').textContent = name || '';
+            document.getElementById('form-delete')
+                .setAttribute('action', `{{ url('/super/models') }}/${id}`);
+
+            openModal(modalDelete);
+        });
+    });
+
+    /* ============================
+       AUTO-HIDE SUCCESS NOTIF
+    ============================= */
+    const notif = document.getElementById('center-notification');
+    if (notif) setTimeout(() => notif.classList.add('hidden'), 2500);
+
+    /* ============================
+       LIVE SEARCH
+    ============================= */
+    const input = document.getElementById('model-search');
+    const list = document.querySelector('.divide-y');
+    const rows = list ? Array.from(list.querySelectorAll('.grid')) : [];
+    let emptyMsg = null;
+
+    const ensureEmpty = () => {
+        if (!list) return;
+        if (!emptyMsg) {
+            emptyMsg = document.createElement('div');
+            emptyMsg.className = 'px-6 py-6 text-sm text-stone-600';
+            emptyMsg.textContent = 'Tidak ada hasil.';
+            emptyMsg.style.display = 'none';
+            list.appendChild(emptyMsg);
+        }
+    };
+    ensureEmpty();
+
+    const apply = () => {
+        const q = (input?.value || '').toLowerCase();
+        let visible = 0;
+
+        rows.forEach(r => {
+            const text = r.textContent?.toLowerCase() || '';
+            const match = !q || text.includes(q);
+            r.style.display = match ? '' : 'none';
+            if (match) visible++;
+        });
+
+        if (emptyMsg) emptyMsg.style.display = visible === 0 ? '' : 'none';
+    };
+
+    input?.addEventListener('input', apply);
+    apply();
+
+    /* ====================================================
+       AUTO-OPEN MODAL WHEN VALIDATION FAILED (MERGED)
+    ==================================================== */
+    try {
+        const hadErrors = {{ $errors->any() ? 'true' : 'false' }};
+        const ctx = "{{ old('context') }}";
+        const oldId = "{{ old('id') }}";
+
+        if (hadErrors) {
+            if (ctx === "super-add") {
+                openModal(modalAdd);
+            }
+
+            if (ctx === "super-edit") {
+                if (oldId) {
+                    document.getElementById("form-edit")
+                        ?.setAttribute("action", `{{ url('/super/models') }}/${oldId}`);
                 }
-
-                // Delete buttons
-                document.querySelectorAll('.btn-delete').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const id = btn.getAttribute('data-id');
-                        const name = btn.getAttribute('data-name');
-                        document.getElementById('delete-name').textContent = name || '';
-                        document.getElementById('form-delete').setAttribute('action', `{{ url('/super/models') }}/${id}`);
-                        openModal(modalDelete);
-                    });
-                });
-
-                // Auto hide centered notification
-                const notif = document.getElementById('center-notification');
-                if (notif) setTimeout(() => notif.classList.add('hidden'), 2500);
-
-                // Live search filter for models list
-                const input = document.getElementById('model-search');
-                const list = document.querySelector('.divide-y');
-                const rows = list ? Array.from(list.querySelectorAll('.grid')) : [];
-                let emptyMsg = null;
-                const ensureEmpty = () => {
-                    if (!list) return; 
-                    if (!emptyMsg) {
-                        emptyMsg = document.createElement('div');
-                        emptyMsg.className = 'px-6 py-6 text-sm text-stone-600';
-                        emptyMsg.textContent = 'Tidak ada hasil.';
-                        emptyMsg.style.display = 'none';
-                        list.appendChild(emptyMsg);
-                    }
-                };
-                ensureEmpty();
-                const apply = () => {
-                    const q = (input?.value || '').toLowerCase();
-                    let visible = 0;
-                    rows.forEach(r => {
-                        const text = r.textContent?.toLowerCase() || '';
-                        const match = !q || text.includes(q);
-                        r.style.display = match ? '' : 'none';
-                        if (match) visible++;
-                    });
-                    if (emptyMsg) emptyMsg.style.display = visible === 0 ? '' : 'none';
-                };
-                input?.addEventListener('input', apply);
-                apply();
-            });
+                openModal(modalEdit);
+            }
+        }
+    } catch (e) {}
+});
         </script>
     </div>
 @endsection
                     <!-- Add Modal (ensure error visibility and context) -->
-                    @push('super-add-modal-context')
-                    @endpush
-                // Auto-open modal when validation fails
-                try {
-                    const hadErrors = JSON.parse('{{ $errors->any() ? 'true' : 'false' }}');
-                    const ctx = '{{ old('context') }}';
-                    const oldId = '{{ old('id') }}';
-                    if (hadErrors && ctx === 'super-edit') {
-            if (oldId) document.getElementById('form-edit')?.setAttribute('action', `{{ url('/super/models') }}/${oldId}`);
-                        openModal(modalEdit);
-                    }
-                } catch {}
+                    
